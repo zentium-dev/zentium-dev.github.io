@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZentiumDev — Android &amp; backend engineering</title>
+<meta name="description" content="ZentiumDev builds Android apps and the backends behind them. Case studies: Lanka Draw lottery results, and VaxAware Global vaccination scheduling.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────────────
+   Palette taken from printed lottery stock rather than a screen theme:
+   newsprint cream, thermal-printer grey, and the foil gold used on the
+   ticket header. The navy is the app's own dark surface.
+   ───────────────────────────────────────────────────────────────────── */
+:root{
+  --ink:#0A0E1A;
+  --stub:#141C33;
+  --stub-2:#1B2542;
+  --paper:#F7F1E6;
+  --paper-dim:#E4DAC8;
+  --gold:#C9A227;
+  --gold-lit:#EBCB6A;
+  --thermal:#78809A;   /* thermal-printer grey, for labels */
+  --win:#2E8B57;
+  --rule:rgba(201,162,39,.28);
+  --maxw:1080px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0; background:var(--ink); color:var(--paper);
+  font-family:Inter,system-ui,sans-serif; font-size:16px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+a{color:var(--gold-lit)}
+h1,h2,h3{font-family:Archivo,system-ui,sans-serif; line-height:1.02; margin:0}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+/* Perforation — the one piece of ticket vernacular reused throughout.
+   It marks where one section tears from the next, which is what a
+   perforation actually does. */
+.perf{
+  height:22px; margin:0;
+  background-image:radial-gradient(circle at 11px 11px, var(--ink) 5px, transparent 5.5px);
+  background-size:22px 22px; background-color:var(--gold);
+  opacity:.42;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────── */
+.hero{padding:72px 0 56px; position:relative; overflow:hidden}
+.hero::after{ /* foil sheen, static */
+  content:""; position:absolute; inset:-30% -10% auto auto; width:60vw; height:60vw;
+  background:radial-gradient(circle, rgba(201,162,39,.16), transparent 62%);
+  pointer-events:none;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--gold); margin:0 0 22px;
+}
+.hero h1{
+  font-weight:900; font-size:clamp(44px,8.4vw,92px); letter-spacing:-.025em;
+  max-width:14ch;
+}
+.lede{
+  margin:22px 0 0; max-width:56ch; font-size:clamp(17px,2.1vw,20px);
+  color:#C3CADC;
+}
+
+.cta{display:flex; flex-wrap:wrap; gap:12px; margin:34px 0 0}
+.btn{
+  display:inline-block; padding:12px 22px; border-radius:999px; font-weight:600;
+  font-size:14px; text-decoration:none; border:1px solid var(--gold);
+}
+.btn-solid{background:var(--gold); color:#161200}
+.btn-ghost{color:var(--gold-lit)}
+.btn:focus-visible{outline:3px solid var(--gold-lit); outline-offset:3px}
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+.band{padding:64px 0}
+.band-paper{background:var(--paper); color:#1A1710}
+.band-paper .kicker{color:#8A6E12}
+.kicker{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--gold); margin:0 0 14px;
+}
+.band h2{font-weight:900; font-size:clamp(28px,4.4vw,42px); letter-spacing:-.02em; max-width:20ch}
+.band p{max-width:66ch}
+.band-paper p{color:#4A4335}
+
+/* Spec sheet — dense, monospaced, the way a build manifest actually reads */
+.spec{margin:34px 0 0; border-top:1px solid rgba(26,23,16,.14)}
+.spec-row{
+  display:grid; grid-template-columns:150px 1fr; gap:18px;
+  padding:15px 0; border-bottom:1px solid rgba(26,23,16,.14); align-items:baseline;
+}
+.spec-key{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.12em;
+  text-transform:uppercase; color:#8A6E12;
+}
+.spec-val{font-size:15px; color:#332E22}
+.spec-val code{
+  font-family:"IBM Plex Mono",monospace; font-size:13.5px; background:rgba(26,23,16,.06);
+  padding:2px 7px; border-radius:5px; margin:0 3px 4px 0; display:inline-block;
+}
+@media(max-width:620px){.spec-row{grid-template-columns:1fr; gap:6px}}
+
+/* Flow — the data path, drawn as a path */
+.flow{display:grid; gap:14px; margin:34px 0 0}
+.node{
+  border:1px solid var(--rule); border-radius:12px; padding:18px 20px;
+  background:linear-gradient(180deg,var(--stub),var(--stub-2));
+}
+.node h3{font-size:16px; font-weight:700; margin:0 0 6px}
+.node p{margin:0; font-size:14.5px; color:#AFB8CE; max-width:none}
+.node .mono{font-size:12.5px; color:var(--gold); letter-spacing:.06em; display:block; margin:0 0 8px}
+.arrow{
+  text-align:center; color:var(--gold); font-family:"IBM Plex Mono",monospace;
+  font-size:13px; letter-spacing:.14em;
+}
+
+/* Terminal block for the deploy story */
+.term{
+  margin:26px 0 0; border-radius:12px; overflow:hidden; border:1px solid var(--rule);
+  background:#070A12;
+}
+.term-bar{
+  padding:9px 14px; background:#0E1424; border-bottom:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em;
+  color:var(--thermal); text-transform:uppercase;
+}
+.term pre{
+  margin:0; padding:18px 16px; overflow-x:auto;
+  font-family:"IBM Plex Mono",monospace; font-size:13px; line-height:1.85; color:#C7D0E4;
+}
+.term .c{color:#5E6884}
+.term .g{color:var(--gold-lit)}
+
+/* Problem cards — the substance of the case study */
+.probs{display:grid; gap:16px; margin:34px 0 0; grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.prob{border:1px solid rgba(26,23,16,.16); border-radius:14px; padding:22px; background:#FFFBF3}
+.prob h3{font-size:17px; font-weight:700; margin:0 0 10px; color:#1A1710}
+.prob p{font-size:14.5px; color:#4A4335; margin:0}
+.prob .tag{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; color:#8A6E12; display:block; margin:0 0 10px;
+}
+
+/* Gallery */
+.shots{
+  display:grid; gap:16px; margin:34px 0 0;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+}
+.shots img{
+  width:100%; height:auto; border-radius:14px; display:block;
+  border:1px solid var(--rule);
+}
+
+footer{padding:52px 0 64px; color:var(--thermal); font-size:14px}
+footer a{text-decoration:none}
+footer .mono{font-size:12px; letter-spacing:.14em; text-transform:uppercase}
+.note{font-size:13px; color:var(--thermal); margin:22px 0 0; max-width:66ch}
+.band-paper .note{color:#6B6353}
+
+/* ── Project cards ────────────────────────────────────────────────── */
+.projects{display:grid; gap:22px; margin:40px 0 0}
+.project{
+  display:grid; grid-template-columns:186px 1fr; gap:26px; align-items:start;
+  border:1px solid var(--rule); border-radius:16px; padding:24px;
+  background:linear-gradient(180deg,var(--stub),var(--stub-2));
+  text-decoration:none; color:inherit; transition:border-color .18s ease, transform .18s ease;
+}
+.project:hover,.project:focus-visible{border-color:var(--gold); transform:translateY(-2px)}
+.project:focus-visible{outline:3px solid var(--gold-lit); outline-offset:3px}
+.project img{width:100%; height:auto; border-radius:11px; display:block; border:1px solid var(--rule)}
+.project h2{font-size:clamp(23px,3vw,30px); font-weight:900; letter-spacing:-.02em; margin:0 0 10px}
+.project p{margin:0; font-size:15px; color:#AFB8CE; max-width:60ch}
+.project .mono{
+  font-size:11.5px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--gold); display:block; margin:0 0 10px;
+}
+.stackline{margin:16px 0 0; display:flex; flex-wrap:wrap; gap:6px}
+.stackline code{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; color:#C7D0E4;
+  background:rgba(201,162,39,.09); border:1px solid var(--rule);
+  padding:3px 9px; border-radius:6px;
+}
+.more{margin:18px 0 0; font-size:14px; font-weight:600; color:var(--gold-lit)}
+@media(max-width:640px){
+  .project{grid-template-columns:1fr}
+  .project img{max-width:180px}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">ZentiumDev · Sri Lanka</p>
+    <h1>Android apps, and the backends behind them.</h1>
+    <p class="lede">
+      I build and ship production Android software on my own — the app, the API, the
+      admin panel and the server it runs on. Two case studies below, each written to
+      show the decisions rather than the feature list.
+    </p>
+    <div class="cta">
+      <a class="btn btn-solid" href="#work">Case studies</a>
+      <a class="btn btn-ghost" href="mailto:zentium.dev@gmail.com">Get in touch</a>
+    </div>
+  </div>
+</header>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band" id="work">
+  <div class="wrap">
+    <p class="kicker">Selected work</p>
+    <h2>Two shipped products.</h2>
+
+    <div class="projects">
+      <a class="project" href="projects/lottery-sri-lanka.html">
+        <img src="assets/lottery-1.jpg" alt="Lottery Sri Lanka home screen" loading="lazy" width="810" height="1440">
+        <div>
+          <span class="mono">Android · Ktor · PostgreSQL · Vue</span>
+          <h2>Lanka Draw</h2>
+          <p>
+            Results and ticket checking for all sixteen NLB and DLB games. Camera scanning
+            of a printed ticket, a configuration-driven prize engine, and Sinhala, Tamil
+            and English throughout. Live on Google Play.
+          </p>
+          <div class="stackline">
+            <code>Kotlin</code><code>Compose</code><code>CameraX</code><code>ML Kit</code>
+            <code>Ktor</code><code>PostgreSQL</code><code>Vue 3</code>
+          </div>
+          <p class="more">Read the case study →</p>
+        </div>
+      </a>
+
+      <a class="project" href="projects/vaxaware-global.html">
+        <img src="assets/vax-1.jpg" alt="VaxAware Global family screen" loading="lazy" width="540" height="960">
+        <div>
+          <span class="mono">Android · Offline-first</span>
+          <h2>VaxAware Global</h2>
+          <p>
+            Vaccination schedules and reminders for a whole household, built on four
+            published immunisation schedules. No account, no server, no analytics —
+            every record stays in app-private storage on the device.
+          </p>
+          <div class="stackline">
+            <code>Kotlin</code><code>Compose</code><code>Room</code><code>Hilt</code>
+            <code>WorkManager</code><code>AGP 9</code>
+          </div>
+          <p class="more">Read the case study →</p>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band band-paper">
+  <div class="wrap">
+    <p class="kicker">How I work</p>
+    <h2>One person, the whole stack.</h2>
+    <p>
+      Both projects above were designed, built, deployed and published by me. That means
+      the architecture decisions are mine to defend, and the case studies say what went
+      wrong as well as what shipped — the interesting part of any of this is the problem
+      that only showed up in production.
+    </p>
+
+    <div class="spec">
+      <div class="spec-row">
+        <span class="spec-key">Mobile</span>
+        <span class="spec-val">
+          <code>Kotlin</code><code>Jetpack Compose</code><code>Material 3</code>
+          <code>Room</code><code>Hilt</code><code>WorkManager</code><code>CameraX</code>
+          <code>Coroutines / Flow</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Backend</span>
+        <span class="spec-val">
+          <code>Ktor</code><code>Spring Boot</code><code>PostgreSQL</code>
+          <code>Exposed</code><code>nginx</code><code>systemd</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Web</span>
+        <span class="spec-val">
+          <code>Vue 3</code><code>React</code><code>Tailwind CSS</code><code>Vite</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Ship</span>
+        <span class="spec-val">
+          <code>Google Play</code><code>Firebase Hosting</code><code>DigitalOcean</code>
+          <code>Cloudflare</code>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<footer>
+  <div class="wrap">
+    <p class="mono" style="color:var(--gold)">ZentiumDev</p>
+    <p style="margin:8px 0 0">
+      Android and backend engineering — Kotlin, Compose, Ktor, PostgreSQL.<br>
+      <a href="https://github.com/zentium-dev">github.com/zentium-dev</a> ·
+      <a href="mailto:zentium.dev@gmail.com">zentium.dev@gmail.com</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

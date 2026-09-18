@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VaxAware Global — ZentiumDev</title>
+<meta name="description" content="Case study: an offline-first Android vaccination scheduler built on four published immunisation schedules, with WorkManager reminders and no backend. Built by ZentiumDev.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────────────
+   Palette taken from printed lottery stock rather than a screen theme:
+   newsprint cream, thermal-printer grey, and the foil gold used on the
+   ticket header. The navy is the app's own dark surface.
+   ───────────────────────────────────────────────────────────────────── */
+:root{
+  --ink:#0A0E1A;
+  --stub:#141C33;
+  --stub-2:#1B2542;
+  --paper:#F7F1E6;
+  --paper-dim:#E4DAC8;
+  --gold:#C9A227;
+  --gold-lit:#EBCB6A;
+  --thermal:#78809A;   /* thermal-printer grey, for labels */
+  --win:#2E8B57;
+  --rule:rgba(201,162,39,.28);
+  --maxw:1080px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0; background:var(--ink); color:var(--paper);
+  font-family:Inter,system-ui,sans-serif; font-size:16px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+a{color:var(--gold-lit)}
+h1,h2,h3{font-family:Archivo,system-ui,sans-serif; line-height:1.02; margin:0}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+/* Perforation — the one piece of ticket vernacular reused throughout.
+   It marks where one section tears from the next, which is what a
+   perforation actually does. */
+.perf{
+  height:22px; margin:0;
+  background-image:radial-gradient(circle at 11px 11px, var(--ink) 5px, transparent 5.5px);
+  background-size:22px 22px; background-color:var(--gold);
+  opacity:.42;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────── */
+.hero{padding:72px 0 56px; position:relative; overflow:hidden}
+.hero::after{ /* foil sheen, static */
+  content:""; position:absolute; inset:-30% -10% auto auto; width:60vw; height:60vw;
+  background:radial-gradient(circle, rgba(201,162,39,.16), transparent 62%);
+  pointer-events:none;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--gold); margin:0 0 22px;
+}
+.hero h1{
+  font-weight:900; font-size:clamp(44px,8.4vw,92px); letter-spacing:-.025em;
+  max-width:14ch;
+}
+.lede{
+  margin:22px 0 0; max-width:56ch; font-size:clamp(17px,2.1vw,20px);
+  color:#C3CADC;
+}
+
+/* Signature: the offset strip. A date of birth and a schedule offset resolve
+   into a due date — the single calculation this whole app exists to perform,
+   shown once. Same shape as the lottery page's scan strip, because it is the
+   same idea: an input becoming a verdict. */
+.scan{
+  margin:40px 0 0; border:1px solid var(--rule); border-radius:14px;
+  background:linear-gradient(180deg,var(--stub),var(--stub-2));
+  padding:22px 24px; max-width:520px; position:relative; overflow:hidden;
+}
+.scan-label{font-size:11px; letter-spacing:.2em; color:var(--thermal); text-transform:uppercase}
+.scan-serial{
+  font-family:"IBM Plex Mono",monospace; font-size:clamp(19px,3.4vw,25px);
+  font-weight:500; margin:8px 0 2px; letter-spacing:.02em;
+}
+.scan-op{
+  font-family:"IBM Plex Mono",monospace; font-size:13.5px; color:var(--thermal);
+  margin:0 0 10px; display:block;
+}
+.scan-verdict{
+  display:block; color:var(--gold-lit); font-size:15px; font-weight:600;
+  opacity:0; transform:translateY(6px);
+  animation:verdict .6s ease-out 2.1s forwards;
+}
+.scan-verdict b{font-family:"IBM Plex Mono",monospace; font-weight:600}
+.scan-line{
+  position:absolute; left:0; right:0; height:2px; top:0;
+  background:linear-gradient(90deg,transparent,var(--gold-lit),transparent);
+  animation:sweep 2.1s cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes sweep{0%{top:0;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:100%;opacity:0}}
+@keyframes verdict{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .scan-line{display:none}
+  .scan-verdict{opacity:1; transform:none; animation:none}
+}
+
+.cta{display:flex; flex-wrap:wrap; gap:12px; margin:34px 0 0}
+.btn{
+  display:inline-block; padding:12px 22px; border-radius:999px; font-weight:600;
+  font-size:14px; text-decoration:none; border:1px solid var(--gold);
+}
+.btn-solid{background:var(--gold); color:#161200}
+.btn-ghost{color:var(--gold-lit)}
+.btn:focus-visible{outline:3px solid var(--gold-lit); outline-offset:3px}
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+.band{padding:64px 0}
+.band-paper{background:var(--paper); color:#1A1710}
+.band-paper .kicker{color:#8A6E12}
+.kicker{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--gold); margin:0 0 14px;
+}
+.band h2{font-weight:900; font-size:clamp(28px,4.4vw,42px); letter-spacing:-.02em; max-width:20ch}
+.band p{max-width:66ch}
+.band-paper p{color:#4A4335}
+
+/* Spec sheet — dense, monospaced, the way a build manifest actually reads */
+.spec{margin:34px 0 0; border-top:1px solid rgba(26,23,16,.14)}
+.spec-row{
+  display:grid; grid-template-columns:150px 1fr; gap:18px;
+  padding:15px 0; border-bottom:1px solid rgba(26,23,16,.14); align-items:baseline;
+}
+.spec-key{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.12em;
+  text-transform:uppercase; color:#8A6E12;
+}
+.spec-val{font-size:15px; color:#332E22}
+.spec-val code{
+  font-family:"IBM Plex Mono",monospace; font-size:13.5px; background:rgba(26,23,16,.06);
+  padding:2px 7px; border-radius:5px; margin:0 3px 4px 0; display:inline-block;
+}
+@media(max-width:620px){.spec-row{grid-template-columns:1fr; gap:6px}}
+
+/* Flow — the data path, drawn as a path */
+.flow{display:grid; gap:14px; margin:34px 0 0}
+.node{
+  border:1px solid var(--rule); border-radius:12px; padding:18px 20px;
+  background:linear-gradient(180deg,var(--stub),var(--stub-2));
+}
+.node h3{font-size:16px; font-weight:700; margin:0 0 6px}
+.node p{margin:0; font-size:14.5px; color:#AFB8CE; max-width:none}
+.node .mono{font-size:12.5px; color:var(--gold); letter-spacing:.06em; display:block; margin:0 0 8px}
+.arrow{
+  text-align:center; color:var(--gold); font-family:"IBM Plex Mono",monospace;
+  font-size:13px; letter-spacing:.14em;
+}
+
+/* Terminal block for the deploy story */
+.term{
+  margin:26px 0 0; border-radius:12px; overflow:hidden; border:1px solid var(--rule);
+  background:#070A12;
+}
+.term-bar{
+  padding:9px 14px; background:#0E1424; border-bottom:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em;
+  color:var(--thermal); text-transform:uppercase;
+}
+.term pre{
+  margin:0; padding:18px 16px; overflow-x:auto;
+  font-family:"IBM Plex Mono",monospace; font-size:13px; line-height:1.85; color:#C7D0E4;
+}
+.term .c{color:#5E6884}
+.term .g{color:var(--gold-lit)}
+
+/* Problem cards — the substance of the case study */
+.probs{display:grid; gap:16px; margin:34px 0 0; grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.prob{border:1px solid rgba(26,23,16,.16); border-radius:14px; padding:22px; background:#FFFBF3}
+.prob h3{font-size:17px; font-weight:700; margin:0 0 10px; color:#1A1710}
+.prob p{font-size:14.5px; color:#4A4335; margin:0}
+.prob .tag{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; color:#8A6E12; display:block; margin:0 0 10px;
+}
+
+/* Gallery */
+.shots{
+  display:grid; gap:16px; margin:34px 0 0;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+}
+.shots img{
+  width:100%; height:auto; border-radius:14px; display:block;
+  border:1px solid var(--rule);
+}
+
+footer{padding:52px 0 64px; color:var(--thermal); font-size:14px}
+footer a{text-decoration:none}
+footer .mono{font-size:12px; letter-spacing:.14em; text-transform:uppercase}
+.note{font-size:13px; color:var(--thermal); margin:22px 0 0; max-width:66ch}
+.band-paper .note{color:#6B6353}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow"><a href="../" style="color:inherit;text-decoration:none">ZentiumDev</a> · Case study · Android · 2026</p>
+    <h1>Four national schedules. One family timeline.</h1>
+    <p class="lede">
+      VaxAware Global keeps vaccination records for a whole household — children and
+      adults — and reminds you before each dose is due. Every date is derived from
+      published immunisation guidance, and none of it leaves the phone.
+    </p>
+
+    <div class="scan" aria-label="A date of birth and a schedule offset resolving into a due date">
+      <span class="scan-line" aria-hidden="true"></span>
+      <span class="scan-label">Date of birth</span>
+      <div class="scan-serial">31 Jan 2025</div>
+      <span class="scan-op">+ AgeOffset(months = 15) &nbsp;·&nbsp; DTaP dose 4</span>
+      <span class="scan-verdict">→ Due <b>30 Apr 2026</b></span>
+    </div>
+
+    <div class="cta">
+      <a class="btn btn-solid" href="#build">How it's built</a>
+      <a class="btn btn-ghost" href="https://github.com/zentium-dev">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band band-paper" id="build">
+  <div class="wrap">
+    <p class="kicker">Stack</p>
+    <h2>One module, no server.</h2>
+    <p>
+      There is no API to build here, and that is the design rather than a shortcut.
+      Vaccination records tied to a named child are about as sensitive as consumer
+      data gets; the safest architecture for them is one with nowhere to send them.
+    </p>
+
+    <div class="spec">
+      <div class="spec-row">
+        <span class="spec-key">Android</span>
+        <span class="spec-val">
+          <code>Kotlin</code><code>Jetpack Compose</code><code>Material 3</code>
+          <code>Navigation Compose</code><code>Hilt</code><code>Room</code>
+          <code>DataStore</code><code>WorkManager</code><code>Coroutines / Flow</code>
+          <code>kotlinx.serialization</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Build</span>
+        <span class="spec-val">
+          <code>AGP 9</code><code>Gradle 9</code><code>KSP</code>
+          <code>compileSdk 37</code><code>minSdk 26</code><code>R8</code>
+          <code>version catalog</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Data</span>
+        <span class="spec-val">
+          <code>SQLite via Room</code><code>DataStore Preferences</code>
+          <code>java.time</code><code>app-private storage</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Services</span>
+        <span class="spec-val">
+          <code>Google AdMob</code><code>UMP consent</code>
+          <code>Play In-App Review</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Schedules</span>
+        <span class="spec-val">
+          <code>CDC 2025</code><code>WHO / EPI</code><code>India (IMA / IAP)</code>
+          <code>Sri Lanka national</code>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band">
+  <div class="wrap">
+    <p class="kicker">Architecture</p>
+    <h2>How a due date is produced.</h2>
+    <p>
+      Adding a country should not touch the user interface. It does not: a schedule is
+      an interface with a list of rows, and everything downstream reads the same shape.
+    </p>
+
+    <div class="flow">
+      <div class="node">
+        <span class="mono">Guideline</span>
+        <h3>An interface, four implementations</h3>
+        <p>
+          CDC 2025, the WHO/EPI baseline, the IMA/IAP schedule for India and Sri Lanka's
+          national programme. Each is one file listing its rows and naming its source.
+          Adding a fifth country means adding a file and a line in the registry.
+        </p>
+      </div>
+      <div class="arrow" aria-hidden="true">↓</div>
+      <div class="node">
+        <span class="mono">VaccineDefinition</span>
+        <h3>A row carries its own rules</h3>
+        <p>
+          An offset expressed in weeks, months or years; the anchor it counts from; the
+          age label a clinic would recognise; and how strongly the schedule recommends
+          it — routine, risk-based, or shared decision.
+        </p>
+      </div>
+      <div class="arrow" aria-hidden="true">↓</div>
+      <div class="node">
+        <span class="mono">ScheduleBuilder</span>
+        <h3>The only place a date is derived</h3>
+        <p>
+          One use case turns a profile into dated doses. Children anchor to date of
+          birth, adults to the day the profile was created, and age-triggered adult
+          rows — shingles at 50, RSV at 75 — anchor back to birth again.
+        </p>
+      </div>
+      <div class="arrow" aria-hidden="true">↓</div>
+      <div class="node">
+        <span class="mono">Room + WorkManager</span>
+        <h3>Persisted, then queued</h3>
+        <p>
+          Doses land in SQLite where the user can edit any of them. The scheduler reads
+          back what is still outstanding and queues a reminder for each one inside a
+          rolling window.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band band-paper">
+  <div class="wrap">
+    <p class="kicker">The abstraction</p>
+    <h2>A schedule is data, not code.</h2>
+    <p>
+      The whole contract fits on a screen. Everything specific to a country lives in the
+      list; nothing specific to a country lives anywhere else.
+    </p>
+
+    <div class="term">
+      <div class="term-bar">domain/guideline/Guideline.kt</div>
+      <pre><span class="c">// A distance from an anchor, expressed the way published schedules</span>
+<span class="c">// express it — so "15 months" lands on the same day of the month</span>
+<span class="c">// and "4 years" survives leap years.</span>
+data class <span class="g">AgeOffset</span>(
+    val years: Int = 0, val months: Int = 0,
+    val weeks: Int = 0, val days: Int = 0,
+)
+
+enum class <span class="g">Recommendation</span> { ROUTINE, RISK_BASED, SHARED_DECISION }
+
+interface <span class="g">Guideline</span> {
+    val id: String
+    val displayName: String
+    val source: String
+    val definitions: List&lt;VaccineDefinition&gt;
+
+    <span class="c">// Only routine rows are placed on a timeline automatically.</span>
+    fun routineFor(track: ScheduleTrack) =
+        definitionsFor(track).filter { it.recommendation == ROUTINE }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band band-paper">
+  <div class="wrap">
+    <p class="kicker">Problems</p>
+    <h2>The parts that were not obvious.</h2>
+
+    <div class="probs">
+      <div class="prob">
+        <span class="tag">Calendar maths</span>
+        <h3>Fifteen months is not 450 days</h3>
+        <p>
+          The first version multiplied months by 30. A child born on 31 January drifted
+          days off every milestone, and "4–6 years" lost a day per leap year. Offsets are
+          now calendar offsets. India's primary series runs on <em>weeks</em> — 6, 10 and
+          14 — which is not the same as CDC's 2, 4 and 6 months, and the type makes that
+          difference impossible to blur.
+        </p>
+      </div>
+      <div class="prob">
+        <span class="tag">Restraint</span>
+        <h3>Some rows must never be scheduled</h3>
+        <p>
+          Nirsevimab depends on the season and the mother's vaccination. India's third
+          rotavirus dose exists for one brand and not another. Whether either applies
+          turns on facts the app deliberately does not hold, so those rows are listed in
+          the library with their condition stated and never dated onto a child's
+          timeline. The app says they exist; it does not decide they apply.
+        </p>
+      </div>
+      <div class="prob">
+        <span class="tag">Scheduling</span>
+        <h3>A queue that would not fit</h3>
+        <p>
+          One WorkManager job per pending dose sounds right until you count: a family of
+          four on a childhood schedule is well over a hundred doses, some due years out.
+          Multi-year delays are far outside what WorkManager is built for and close to
+          the per-app job ceiling some OEM builds enforce. Reminders are now queued
+          sixty days ahead, and a daily pass pulls in the next batch.
+        </p>
+      </div>
+      <div class="prob">
+        <span class="tag">The silent case</span>
+        <h3>Overdue doses never rang</h3>
+        <p>
+          The trigger is the due date minus the notice period. Anything whose moment had
+          already passed was dropped — which covered every overdue dose, and every dose
+          in an adult profile, since the adult schedule dates from enrolment. Those are
+          precisely the doses worth chasing. They are now nudged at the next occurrence
+          of the reminder hour, at most once a day.
+        </p>
+      </div>
+      <div class="prob">
+        <span class="tag">Permissions</span>
+        <h3>No exact alarms, no declaration</h3>
+        <p>
+          Reminders run on WorkManager rather than AlarmManager. Work survives reboots
+          and updates without a boot receiver, retries with backoff on its own, and needs
+          neither <code>SCHEDULE_EXACT_ALARM</code> nor the Play Console declaration that
+          permission now requires. A vaccination notice does not need second-level
+          precision.
+        </p>
+      </div>
+      <div class="prob">
+        <span class="tag">Privacy</span>
+        <h3>Health data with nowhere to go</h3>
+        <p>
+          Names, dates of birth and dose records are special category data under GDPR
+          Article 9. There is no account, no sync and no analytics, so the question of
+          protecting them in transit never arises. The only network traffic in the app
+          is the ad request, and nothing entered by the user is used to target it.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band band-paper">
+  <div class="wrap">
+    <p class="kicker">Screens</p>
+    <h2>The app.</h2>
+    <div class="shots">
+      <img src="../assets/vax-1.jpg" alt="Family screen listing each person with their dose progress and next due date" loading="lazy" width="540" height="960">
+      <img src="../assets/vax-2.jpg" alt="A person's schedule with recorded, upcoming and overdue counts and a filterable dose list" loading="lazy" width="540" height="960">
+      <img src="../assets/vax-3.jpg" alt="Upcoming doses across the whole household, grouped by month" loading="lazy" width="540" height="960">
+      <img src="../assets/vax-4.jpg" alt="Vaccine library showing the CDC schedule with its source and risk-based rows marked" loading="lazy" width="540" height="960">
+      <img src="../assets/vax-5.jpg" alt="Settings for reminder time, notice period, weekly summary and theme" loading="lazy" width="540" height="960">
+      <img src="../assets/vax-6.jpg" alt="About screen with the privacy statement, medical disclaimer and FAQ" loading="lazy" width="540" height="960">
+    </div>
+    <p class="note">
+      VaxAware Global is a scheduler and a record keeper. It does not give medical advice,
+      does not recommend or supply vaccines, and does not replace a clinic. The schedules
+      are transcribed from published guidance and are a starting point only. The same
+      statement appears in the app, its privacy policy and its Play listing.
+    </p>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<footer>
+  <div class="wrap">
+    <p class="mono" style="color:var(--gold)"><a href="../" style="color:inherit;text-decoration:none">ZentiumDev</a></p>
+    <p style="margin:8px 0 0">
+      Android and backend engineering — Kotlin, Compose, Ktor, PostgreSQL.<br>
+      <a href="https://github.com/zentium-dev">github.com/zentium-dev</a> ·
+      <a href="mailto:zentium.dev@gmail.com">zentium.dev@gmail.com</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lottery Sri Lanka — ZentiumDev</title>
+<meta name="description" content="Case study: a trilingual Android lottery-results app with a Kotlin/Ktor backend, QR ticket scanning and a configuration-driven prize engine. Built by ZentiumDev.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────────────
+   Palette taken from printed lottery stock rather than a screen theme:
+   newsprint cream, thermal-printer grey, and the foil gold used on the
+   ticket header. The navy is the app's own dark surface.
+   ───────────────────────────────────────────────────────────────────── */
+:root{
+  --ink:#0A0E1A;
+  --stub:#141C33;
+  --stub-2:#1B2542;
+  --paper:#F7F1E6;
+  --paper-dim:#E4DAC8;
+  --gold:#C9A227;
+  --gold-lit:#EBCB6A;
+  --thermal:#78809A;   /* thermal-printer grey, for labels */
+  --win:#2E8B57;
+  --rule:rgba(201,162,39,.28);
+  --maxw:1080px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0; background:var(--ink); color:var(--paper);
+  font-family:Inter,system-ui,sans-serif; font-size:16px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+a{color:var(--gold-lit)}
+h1,h2,h3{font-family:Archivo,system-ui,sans-serif; line-height:1.02; margin:0}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+/* Perforation — the one piece of ticket vernacular reused throughout.
+   It marks where one section tears from the next, which is what a
+   perforation actually does. */
+.perf{
+  height:22px; margin:0;
+  background-image:radial-gradient(circle at 11px 11px, var(--ink) 5px, transparent 5.5px);
+  background-size:22px 22px; background-color:var(--gold);
+  opacity:.42;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────── */
+.hero{padding:72px 0 56px; position:relative; overflow:hidden}
+.hero::after{ /* foil sheen, static */
+  content:""; position:absolute; inset:-30% -10% auto auto; width:60vw; height:60vw;
+  background:radial-gradient(circle, rgba(201,162,39,.16), transparent 62%);
+  pointer-events:none;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--gold); margin:0 0 22px;
+}
+.hero h1{
+  font-weight:900; font-size:clamp(44px,8.4vw,92px); letter-spacing:-.025em;
+  max-width:14ch;
+}
+.lede{
+  margin:22px 0 0; max-width:56ch; font-size:clamp(17px,2.1vw,20px);
+  color:#C3CADC;
+}
+
+/* Signature: the scan strip. A ticket serial resolves into a verdict —
+   the single thing this whole system exists to do, shown once. */
+.scan{
+  margin:40px 0 0; border:1px solid var(--rule); border-radius:14px;
+  background:linear-gradient(180deg,var(--stub),var(--stub-2));
+  padding:22px 24px; max-width:520px; position:relative; overflow:hidden;
+}
+.scan-label{font-size:11px; letter-spacing:.2em; color:var(--thermal); text-transform:uppercase}
+.scan-serial{
+  font-family:"IBM Plex Mono",monospace; font-size:clamp(19px,3.4vw,27px);
+  font-weight:600; letter-spacing:.06em; margin:8px 0 14px; color:var(--paper);
+}
+.scan-verdict{
+  display:inline-flex; align-items:center; gap:10px; font-weight:600;
+  color:var(--win); font-size:15px; opacity:0; transform:translateY(6px);
+  animation:verdict .6s ease-out 2.1s forwards;
+}
+.scan-verdict b{font-family:"IBM Plex Mono",monospace; font-weight:600}
+.scan-line{
+  position:absolute; left:0; right:0; height:2px; top:0;
+  background:linear-gradient(90deg,transparent,var(--gold-lit),transparent);
+  animation:sweep 2.1s cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes sweep{0%{top:0;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:100%;opacity:0}}
+@keyframes verdict{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .scan-line{display:none}
+  .scan-verdict{opacity:1; transform:none; animation:none}
+}
+
+.cta{display:flex; flex-wrap:wrap; gap:12px; margin:34px 0 0}
+.btn{
+  display:inline-block; padding:12px 22px; border-radius:999px; font-weight:600;
+  font-size:14px; text-decoration:none; border:1px solid var(--gold);
+}
+.btn-solid{background:var(--gold); color:#161200}
+.btn-ghost{color:var(--gold-lit)}
+.btn:focus-visible{outline:3px solid var(--gold-lit); outline-offset:3px}
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+.band{padding:64px 0}
+.band-paper{background:var(--paper); color:#1A1710}
+.band-paper .kicker{color:#8A6E12}
+.kicker{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--gold); margin:0 0 14px;
+}
+.band h2{font-weight:900; font-size:clamp(28px,4.4vw,42px); letter-spacing:-.02em; max-width:20ch}
+.band p{max-width:66ch}
+.band-paper p{color:#4A4335}
+
+/* Spec sheet — dense, monospaced, the way a build manifest actually reads */
+.spec{margin:34px 0 0; border-top:1px solid rgba(26,23,16,.14)}
+.spec-row{
+  display:grid; grid-template-columns:150px 1fr; gap:18px;
+  padding:15px 0; border-bottom:1px solid rgba(26,23,16,.14); align-items:baseline;
+}
+.spec-key{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.12em;
+  text-transform:uppercase; color:#8A6E12;
+}
+.spec-val{font-size:15px; color:#332E22}
+.spec-val code{
+  font-family:"IBM Plex Mono",monospace; font-size:13.5px; background:rgba(26,23,16,.06);
+  padding:2px 7px; border-radius:5px; margin:0 3px 4px 0; display:inline-block;
+}
+@media(max-width:620px){.spec-row{grid-template-columns:1fr; gap:6px}}
+
+/* Flow — the data path, drawn as a path */
+.flow{display:grid; gap:14px; margin:34px 0 0}
+.node{
+  border:1px solid var(--rule); border-radius:12px; padding:18px 20px;
+  background:linear-gradient(180deg,var(--stub),var(--stub-2));
+}
+.node h3{font-size:16px; font-weight:700; margin:0 0 6px}
+.node p{margin:0; font-size:14.5px; color:#AFB8CE; max-width:none}
+.node .mono{font-size:12.5px; color:var(--gold); letter-spacing:.06em; display:block; margin:0 0 8px}
+.arrow{
+  text-align:center; color:var(--gold); font-family:"IBM Plex Mono",monospace;
+  font-size:13px; letter-spacing:.14em;
+}
+
+/* Terminal block for the deploy story */
+.term{
+  margin:26px 0 0; border-radius:12px; overflow:hidden; border:1px solid var(--rule);
+  background:#070A12;
+}
+.term-bar{
+  padding:9px 14px; background:#0E1424; border-bottom:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em;
+  color:var(--thermal); text-transform:uppercase;
+}
+.term pre{
+  margin:0; padding:18px 16px; overflow-x:auto;
+  font-family:"IBM Plex Mono",monospace; font-size:13px; line-height:1.85; color:#C7D0E4;
+}
+.term .c{color:#5E6884}
+.term .g{color:var(--gold-lit)}
+
+/* Problem cards — the substance of the case study */
+.probs{display:grid; gap:16px; margin:34px 0 0; grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.prob{border:1px solid rgba(26,23,16,.16); border-radius:14px; padding:22px; background:#FFFBF3}
+.prob h3{font-size:17px; font-weight:700; margin:0 0 10px; color:#1A1710}
+.prob p{font-size:14.5px; color:#4A4335; margin:0}
+.prob .tag{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; color:#8A6E12; display:block; margin:0 0 10px;
+}
+
+/* Gallery */
+.shots{
+  display:grid; gap:16px; margin:34px 0 0;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+}
+.shots img{
+  width:100%; height:auto; border-radius:14px; display:block;
+  border:1px solid var(--rule);
+}
+
+footer{padding:52px 0 64px; color:var(--thermal); font-size:14px}
+footer a{text-decoration:none}
+footer .mono{font-size:12px; letter-spacing:.14em; text-transform:uppercase}
+.note{font-size:13px; color:var(--thermal); margin:22px 0 0; max-width:66ch}
+.band-paper .note{color:#6B6353}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow"><a href="../" style="color:inherit;text-decoration:none">ZentiumDev</a> · Case study · Android &amp; backend · 2026</p>
+    <h1>Point a camera at a ticket. Know in a second.</h1>
+    <p class="lede">
+      Lottery Sri Lanka checks tickets for all sixteen National Lotteries Board and
+      Development Lotteries Board games. I built the Android app, the Kotlin API
+      behind it, the admin panel that feeds it, and the server it runs on.
+    </p>
+
+    <div class="scan" aria-label="A scanned ticket resolving to a result">
+      <span class="scan-line" aria-hidden="true"></span>
+      <span class="scan-label">Ticket serial</span>
+      <div class="scan-serial">2378&#8209;474802603&#8209;4&#8209;00</div>
+      <span class="scan-verdict">✓ Matched — <b>Rs. 239,780,526.00</b></span>
+    </div>
+
+    <div class="cta">
+      <a class="btn btn-solid" href="#build">How it's built</a>
+      <a class="btn btn-ghost" href="https://github.com/zentium-dev">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band band-paper" id="build">
+  <div class="wrap">
+    <p class="kicker">Stack</p>
+    <h2>Three codebases, one Kotlin language.</h2>
+    <p>
+      Sharing a language across the app and the API meant the prize rules,
+      the result shapes and the parsing logic could be reasoned about the same
+      way on both sides.
+    </p>
+
+    <div class="spec">
+      <div class="spec-row">
+        <span class="spec-key">Android</span>
+        <span class="spec-val">
+          <code>Kotlin</code><code>Jetpack Compose</code><code>Material 3</code>
+          <code>CameraX</code><code>ML Kit Barcode Scanning</code><code>Retrofit</code>
+          <code>OkHttp</code><code>Coroutines / Flow</code><code>DataStore</code>
+          <code>Baseline Profile</code><code>R8</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">API</span>
+        <span class="spec-val">
+          <code>Ktor</code><code>Exposed</code><code>PostgreSQL</code>
+          <code>HikariCP</code><code>kotlinx.serialization</code><code>Logback</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Admin</span>
+        <span class="spec-val">
+          <code>Vue 3</code><code>Pinia</code><code>Vue Router</code>
+          <code>Axios</code><code>Tailwind CSS</code><code>Vite</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Platform</span>
+        <span class="spec-val">
+          <code>DigitalOcean</code><code>Ubuntu</code><code>systemd</code>
+          <code>nginx</code><code>Let's Encrypt</code><code>Firebase Hosting</code>
+        </span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-key">Services</span>
+        <span class="spec-val">
+          <code>Firebase Cloud Messaging</code><code>Firebase Analytics</code>
+          <code>Google AdMob</code><code>Play In-App Review</code>
+          <code>Play In-App Updates</code>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band">
+  <div class="wrap">
+    <p class="kicker">Data path</p>
+    <h2>How a draw reaches a phone.</h2>
+    <p>
+      Results are published by the boards on paper and on their own sites. Getting
+      them onto a handset accurately is the whole job.
+    </p>
+
+    <div class="flow">
+      <div class="node">
+        <span class="mono">01 · Entry</span>
+        <h3>Vue admin panel</h3>
+        <p>
+          A draw's winning numbers, letter, zodiac and promotional draws are typed in
+          against a per-lottery field definition, so each game renders the exact inputs
+          it needs. Validation runs before anything is saved.
+        </p>
+      </div>
+      <div class="arrow" aria-hidden="true">↓ &nbsp; HTTPS · bearer token</div>
+      <div class="node">
+        <span class="mono">02 · Store</span>
+        <h3>Ktor API on PostgreSQL</h3>
+        <p>
+          Each result is stored as JSONB against its lottery, which lets sixteen games
+          with different shapes share one table. Prize tiers live in the lottery's own
+          format definition, so adding a game is configuration rather than a release.
+        </p>
+      </div>
+      <div class="arrow" aria-hidden="true">↓ &nbsp; REST · JSON over TLS</div>
+      <div class="node">
+        <span class="mono">03 · Deliver</span>
+        <h3>Android app</h3>
+        <p>
+          The app pulls results over Retrofit and caches them, so recent draws stay
+          readable without a connection. A silent FCM push tells it when a new result
+          is published rather than having it poll.
+        </p>
+      </div>
+      <div class="arrow" aria-hidden="true">↓ &nbsp; on device</div>
+      <div class="node">
+        <span class="mono">04 · Check</span>
+        <h3>Scan and match</h3>
+        <p>
+          CameraX feeds frames to ML Kit, which decodes the ticket's QR. The numbers
+          are compared against the stored result <em>on the phone</em> — a ticket never
+          leaves the device — and the prize engine walks the tiers to produce a total.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band band-paper">
+  <div class="wrap">
+    <p class="kicker">Running it</p>
+    <h2>Deployed with a shell script and systemd.</h2>
+    <p>
+      No container orchestration for a service this size. The API is a fat JAR that
+      systemd keeps alive, nginx terminates TLS in front of it, and a bash script does
+      the build-and-swap.
+    </p>
+
+    <div class="term">
+      <div class="term-bar">deploy.sh — build, ship, restart, verify</div>
+<pre><span class="c"># build a fat JAR locally, ship only the artifact</span>
+./gradlew <span class="g">shadowJar</span>
+scp build/libs/lottery-api-all.jar <span class="g">$HOST</span>:/opt/lottery-api/
+
+<span class="c"># systemd owns the process: restarts on crash, starts on boot</span>
+ssh <span class="g">$HOST</span> <span class="g">'sudo systemctl restart lottery-api'</span>
+
+<span class="c"># fail loudly if the new build is not actually serving</span>
+curl <span class="g">-fsS</span> https://lottery-sri-lanka.duckdns.org/lotteries &gt; /dev/null \
+  &amp;&amp; echo <span class="g">"deploy ok"</span> || echo <span class="g">"ROLLBACK"</span></pre>
+    </div>
+
+    <p class="note">
+      Secrets stay in an environment file read by the unit, never in the repo. Prize-tier
+      configuration is applied by a second script that PATCHes each lottery and verifies
+      the response, so a malformed payload fails at the terminal rather than silently
+      underpaying someone weeks later.
+    </p>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band">
+  <div class="wrap">
+    <p class="kicker">Problems worth solving</p>
+    <h2>The parts that were not obvious.</h2>
+
+    <div class="probs">
+      <div class="prob">
+        <span class="tag">Prize engine</span>
+        <h3>Promotional draws that actually add up</h3>
+        <p>
+          A Kapruka ticket can win the jackpot plus a motor car, a motorbike and a cash
+          special — four independent raffles in one draw. The engine groups tiers, pays
+          the best in each group, and sums across them, so the total matches the board's
+          published payout instead of showing only the largest line.
+        </p>
+      </div>
+      <div class="prob">
+        <span class="tag">Scanner</span>
+        <h3>Reading a creased thermal ticket</h3>
+        <p>
+          Real tickets are folded, faded and photographed in poor light. Zoom suggestion,
+          a region-of-interest gate, two-frame stability checks and autofocus recovery
+          brought the failure rate down, with progressive on-screen hints when a scan
+          keeps missing.
+        </p>
+      </div>
+      <div class="prob">
+        <span class="tag">Localisation</span>
+        <h3>Sinhala and Tamil, not just translated strings</h3>
+        <p>
+          Both scripts need conjunct shaping and both run considerably longer than the
+          English. Layouts size to fit rather than assuming Latin widths, and the entry
+          boxes mirror the colours of the drawn rows so the mapping is visual rather than
+          counted.
+        </p>
+      </div>
+      <div class="prob">
+        <span class="tag">Correctness</span>
+        <h3>Sixteen games, one schema</h3>
+        <p>
+          Each lottery has its own field shape — four numbers and a letter, six digits,
+          a zodiac sign, two to five promotional draws. Driving all of it from a stored
+          format definition means a new game or a changed prize structure is a config
+          edit, not an app release.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<section class="band band-paper">
+  <div class="wrap">
+    <p class="kicker">Screens</p>
+    <h2>The app.</h2>
+    <div class="shots">
+      <img src="../assets/lottery-1.jpg" alt="Home screen showing the next-draw countdown and latest results" loading="lazy" width="810" height="1440">
+      <img src="../assets/lottery-2.jpg" alt="Scanning a lottery ticket QR code with the camera" loading="lazy" width="810" height="1440">
+      <img src="../assets/lottery-3.jpg" alt="Manual entry screen for typing ticket numbers" loading="lazy" width="810" height="1440">
+      <img src="../assets/lottery-4.jpg" alt="Language picker offering Sinhala, Tamil and English" loading="lazy" width="810" height="1440">
+      <img src="../assets/lottery-5.jpg" alt="Results calendar for browsing past draws by date" loading="lazy" width="810" height="1440">
+      <img src="../assets/lottery-6.jpg" alt="Number frequency statistics for a lottery" loading="lazy" width="810" height="1440">
+    </div>
+    <p class="note">
+      Lottery Sri Lanka is an independent app. It is not affiliated with, endorsed by or
+      operated by the National Lotteries Board or the Development Lotteries Board.
+      Results shown in the app are unofficial — wins are verified with the boards at
+      <a href="https://www.nlb.lk">nlb.lk</a> and <a href="https://www.dlb.lk">dlb.lk</a>.
+    </p>
+  </div>
+</section>
+
+<div class="perf" aria-hidden="true"></div>
+
+<footer>
+  <div class="wrap">
+    <p class="mono" style="color:var(--gold)"><a href="../" style="color:inherit;text-decoration:none">ZentiumDev</a></p>
+    <p style="margin:8px 0 0">
+      Android and backend engineering — Kotlin, Compose, Ktor, PostgreSQL.<br>
+      <a href="https://github.com/zentium-dev">github.com/zentium-dev</a> ·
+      <a href="mailto:zentium.dev@gmail.com">zentium.dev@gmail.com</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
